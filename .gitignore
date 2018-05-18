@@ -5,4 +5,13 @@ libtcg.so
 test_asm.bin
 qemu.log
 env
+
+# setuptools distribution folder
+/*dist/
+/build/
+
+# compiled python modules
 *.pyc
+
+# python egg metadata
+/*.egg-info

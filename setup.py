@@ -2,20 +2,12 @@
 import os
 import subprocess
 import sys
-import shutil
 import glob
-import tarfile
-import multiprocessing
 import time
-
-IS_PYTHON2 = sys.version_info < (3, 0)
-if IS_PYTHON2:
-    from urllib2 import urlopen
-else:
-    from urllib.request import urlopen
-
+from urllib import urlopen
+import tarfile
 import platform
-
+import shutil
 PROJECT_DIR = os.path.dirname(os.path.realpath(__file__))
 LIB_DIR = os.path.join(PROJECT_DIR, 'pyvex', 'lib')
 INCLUDE_DIR = os.path.join(PROJECT_DIR, 'pyvex', 'include')
@@ -36,53 +28,44 @@ from distutils.errors import LibError
 from distutils.command.build import build as _build
 from distutils.command.sdist import sdist as _sdist
 
-# if sys.platform in ('win32', 'cygwin'):
-#     LIBRARY_FILE = 'pyvex.dll'
-#     STATIC_LIBRARY_FILE = 'pyvex.lib'
-# elif sys.platform == 'darwin':
-#     LIBRARY_FILE = "libpyvex.dylib"
-#     STATIC_LIBRARY_FILE = 'libpyvex.a'
-# else:
-#     LIBRARY_FILE = "libpyvex.so"
-#     STATIC_LIBRARY_FILE = 'libpyvex.a'
+TCG_PATH = os.path.join(PROJECT_DIR, 'pytcg', 'libtcg')
+README_PATH = os.path.join(PROJECT_DIR, 'README.md')
+
+try:
+    with open(README_PATH, 'r') as f:
+        readme = f.read()
+except:
+    readme = ""
 
 
-VEX_LIB_NAME = "vex" # can also be vex-amd64-linux
-VEX_PATH = os.path.join(PROJECT_DIR, 'libtcg')
+VEX_PATH = os.path.abspath(os.path.join(PROJECT_DIR, '..', 'vex'))
 
-def _build_vex():
-    e = os.environ.copy()
-    e['MULTIARCH'] = '1'
-    e['DEBUG'] = '1'
+if not os.path.exists(VEX_PATH):
+    VEX_PATH = os.path.join(PROJECT_DIR, 'vex')
 
-    cmd1 = ['./build.sh']
-    for cmd in (cmd1):
-        try:
-            if subprocess.call(cmd, cwd=VEX_PATH, env=e) == 0:
-                break
-        except OSError:
-            continue
-    else:
-        raise LibError("Unable to build libtcg.")
+if not os.path.exists(VEX_PATH):
+    VEX_PATH = os.path.join(PROJECT_DIR, 'vex-master')
 
-# def _shuffle_files():
-#     shutil.rmtree(LIB_DIR, ignore_errors=True)
-#     shutil.rmtree(INCLUDE_DIR, ignore_errors=True)
-#     os.mkdir(LIB_DIR)
-#     os.mkdir(INCLUDE_DIR)
+if not os.path.exists(VEX_PATH):
+    sys.__stderr__.write('###########################################################################\n')
+    sys.__stderr__.write('WARNING: downloading vex sources directly from github.\n')
+    sys.__stderr__.write('If this strikes you as a bad idea, please abort and clone the angr/vex repo\n')
+    sys.__stderr__.write('into the same folder containing the pyvex repo.\n')
+    sys.__stderr__.write('###########################################################################\n')
+    sys.__stderr__.flush()
+    time.sleep(10)
 
-#     pyvex_c_dir = os.path.join(PROJECT_DIR, 'pyvex_c')
-
-#     shutil.copy(os.path.join(pyvex_c_dir, LIBRARY_FILE), LIB_DIR)
-#     shutil.copy(os.path.join(pyvex_c_dir, STATIC_LIBRARY_FILE), LIB_DIR)
-#     shutil.copy(os.path.join(pyvex_c_dir, 'pyvex.h'), INCLUDE_DIR)
-#     for f in glob.glob(os.path.join(VEX_PATH, 'pub', '*')):
-#         shutil.copy(f, INCLUDE_DIR)
+    VEX_URL = 'https://github.com/angr/vex/archive/master.tar.gz'
+    with open('vex-master.tar.gz', 'wb') as v:
+        v.write(urlopen(VEX_URL).read())
+    with tarfile.open('vex-master.tar.gz') as tar:
+        tar.extractall()
 
 def _clean_bins():
     shutil.rmtree(LIB_DIR, ignore_errors=True)
     shutil.rmtree(INCLUDE_DIR, ignore_errors=True)
 
+'''
 def _copy_sources():
     local_vex_path = os.path.join(PROJECT_DIR, 'vex')
     assert local_vex_path != VEX_PATH
@@ -96,8 +79,24 @@ def _copy_sources():
             os.mkdir(dest_dir)
         for srcfile in glob.glob(os.path.join(VEX_PATH, spec)):
             shutil.copy(srcfile, dest_dir)
+'''
+def _build_tcg():
+    e = os.environ.copy()
+
+    cmd1 = ['./build.sh']
+    for cmd in (cmd1):
+        try:
+            if subprocess.call(cmd, cwd=TCG_PATH, env=e) == 0:
+                break
+        except OSError:
+            continue
+    else:
+        raise LibError("Unable to build libtcg.")
+
 
 def _build_ffi():
+    path = os.path.abspath(os.path.curdir)
+    sys.path.insert(0, os.path.join(path))
     import gen_cffi
     try:
         gen_cffi.doit()
@@ -107,28 +106,28 @@ def _build_ffi():
 
 class build(_build):
     def run(self):
-        self.execute(_build_vex, (), msg="Building libtcg")
-        # self.execute(_build_pyvex, (), msg="Building libpyvex")
-        # self.execute(_shuffle_files, (), msg="Copying libraries and headers")
+        path = os.path.abspath(os.path.curdir)
+        self.execute(_build_tcg, (), msg="Building libtcg")
+        os.chdir(os.path.join(path, 'pytcg'))
         self.execute(_build_ffi, (), msg="Creating CFFI defs file")
+        os.chdir(path)
         _build.run(self)
+
 
 class sdist(_sdist):
     def run(self):
         self.execute(_clean_bins, (), msg="Removing binaries")
-        self.execute(_copy_sources, (), msg="Copying VEX sources")
+        #self.execute(_copy_sources, (), msg="Copying VEX sources")
         _sdist.run(self)
 
-cmdclass = { 'build': build, 'sdist': sdist }
+cmdclass = { 'build': build, 'sdist': sdist}
 
 try:
     from setuptools.command.develop import develop as _develop
     from setuptools.command.bdist_egg import bdist_egg as _bdist_egg
     class develop(_develop):
         def run(self):
-            self.execute(_build_vex, (), msg="Building libtcg")
-            # self.execute(_build_pyvex, (), msg="Building libpyvex")
-            # self.execute(_shuffle_files, (), msg="Copying libraries and headers")
+            self.execute(_build_tcg, (), msg="Building libtcg")
             self.execute(_build_ffi, (), msg="Creating CFFI defs file")
             _develop.run(self)
     cmdclass['develop'] = develop
@@ -153,10 +152,13 @@ if 'bdist_wheel' in sys.argv and '--plat-name' not in sys.argv:
         sys.argv.append(name.replace('.', '_').replace('-', '_'))
 
 setup(
-    name="pytcg", version='0.0.0.1', description="A Python interface to libtcg and TCG IR",
+    name="pytcg",
+    version="0.0.0.8",
+    description="A Python interface to libtcg and TCG IR",
     url='https://github.com/angr-tcg/pytcg',
     packages=packages,
     cmdclass=cmdclass,
+    long_description=readme,
     install_requires=[
         'pycparser',
         'cffi>=1.0.3',
@@ -167,6 +169,6 @@ setup(
     setup_requires=[ 'pycparser', 'cffi>=1.0.3' ],
     include_package_data=True,
     package_data={
-        'libtcg': ['*']
-    }
+        'pytcg': ['__init__.py', 'gen_cffi.py','*.so', 'libtcg/build.sh', 'libtcg/*.so.*', 'inc/*'],
+    },
 )

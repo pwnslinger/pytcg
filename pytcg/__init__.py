@@ -6,7 +6,6 @@ import sys
 import argparse
 import archinfo
 import os.path
-
 #
 # Main libtcg loading and initialization
 #
@@ -43,9 +42,9 @@ class TcgInstructionBoundary(object):
     def __init__(self, addr, extra):
         self.addr = addr
         self.extra = extra
-    
+
     def __str__(self):
-        return '@ ' + ('%16x' % self.addr) 
+        return '@ ' + ('%16x' % self.addr)
 
 class TcgCall(object):
     def __init__(self, helper, flags, oargs, iargs):
@@ -96,7 +95,7 @@ class IRSB(object):
         # FIXME: angr will pass len(data), but libtcg has no way to limit the
         # number of instructions decoded (it'll go until it hits a branch),
         # go fix it!)
-        # assert(num_bytes is None) 
+        # assert(num_bytes is None)
         self.arch = arch
         self.addr = mem_addr
         self.size = len(data)
@@ -122,7 +121,7 @@ class IRSB(object):
         self._total_temps = self._tb.total_temps
         self._virt_addr = self.address.virtual_address
         self._num_ops = self._tb.instruction_count
-        
+
         ops = []
         for i in range(self._tb.instruction_count):
             op = self._tb.instructions[i]
@@ -155,12 +154,12 @@ class IRSB(object):
                 #print('  mem_base........: %d' % self._tb.temps[i].mem_base)
                 print('  mem_offset......: %d' % self._tb.temps[i].mem_offset)
                 #print('  name............: %d' % self._tb.temps[i].name)
-        
+
             print('')
 
     def __del__(self):
         tcg.free_instructions(ffi.addressof(self._tb))
-    
+
     def _pp_str(self):
         s = []
         for i in range(self._tb.instruction_count):
@@ -285,7 +284,7 @@ class IRSB(object):
                 s_al = alignment_name[(mem_op & LIBTCG_MO_AMASK) >> LIBTCG_MO_ASHIFT]
                 s_op = ldst_name[mem_op & (LIBTCG_MO_BSWAP | LIBTCG_MO_SSIZE)]
                 # rep += ",%s%s,%u" % (s_al, s_op, ix)
-            
+
             _memop = oi
 
             i = 1
