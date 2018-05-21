@@ -2,15 +2,9 @@
 import os
 import subprocess
 import sys
-import glob
-import time
-from urllib import urlopen
-import tarfile
 import platform
 import shutil
 PROJECT_DIR = os.path.dirname(os.path.realpath(__file__))
-LIB_DIR = os.path.join(PROJECT_DIR, 'pyvex', 'lib')
-INCLUDE_DIR = os.path.join(PROJECT_DIR, 'pyvex', 'include')
 
 try:
     from setuptools import setup
@@ -38,48 +32,19 @@ except:
     readme = ""
 
 
-VEX_PATH = os.path.abspath(os.path.join(PROJECT_DIR, '..', 'vex'))
-
-if not os.path.exists(VEX_PATH):
-    VEX_PATH = os.path.join(PROJECT_DIR, 'vex')
-
-if not os.path.exists(VEX_PATH):
-    VEX_PATH = os.path.join(PROJECT_DIR, 'vex-master')
-
-if not os.path.exists(VEX_PATH):
-    sys.__stderr__.write('###########################################################################\n')
-    sys.__stderr__.write('WARNING: downloading vex sources directly from github.\n')
-    sys.__stderr__.write('If this strikes you as a bad idea, please abort and clone the angr/vex repo\n')
-    sys.__stderr__.write('into the same folder containing the pyvex repo.\n')
-    sys.__stderr__.write('###########################################################################\n')
-    sys.__stderr__.flush()
-    time.sleep(10)
-
-    VEX_URL = 'https://github.com/angr/vex/archive/master.tar.gz'
-    with open('vex-master.tar.gz', 'wb') as v:
-        v.write(urlopen(VEX_URL).read())
-    with tarfile.open('vex-master.tar.gz') as tar:
-        tar.extractall()
-
 def _clean_bins():
-    shutil.rmtree(LIB_DIR, ignore_errors=True)
-    shutil.rmtree(INCLUDE_DIR, ignore_errors=True)
+    path = os.path.join(os.path.abspath(os.path.curdir), 'pytcg')
+    cmd1 = ['make clean']
+    for cmd in (cmd1):
+        try:
+            if subprocess.call(cmd.split(), cwd=path) == 0:
+                break
+        except OSError:
+            continue
+    else:
+        raise LibError("Unable to clean libtcg build.")
 
-'''
-def _copy_sources():
-    local_vex_path = os.path.join(PROJECT_DIR, 'vex')
-    assert local_vex_path != VEX_PATH
-    shutil.rmtree(local_vex_path, ignore_errors=True)
-    os.mkdir(local_vex_path)
 
-    vex_src = ['LICENSE.GPL', 'LICENSE.README', 'Makefile-gcc', 'Makefile-msvc', 'common.mk', 'pub/*.h', 'priv/*.c', 'priv/*.h', 'auxprogs/*.c']
-    for spec in vex_src:
-        dest_dir = os.path.join(local_vex_path, os.path.dirname(spec))
-        if not os.path.isdir(dest_dir):
-            os.mkdir(dest_dir)
-        for srcfile in glob.glob(os.path.join(VEX_PATH, spec)):
-            shutil.copy(srcfile, dest_dir)
-'''
 def _build_tcg():
     e = os.environ.copy()
 
@@ -92,7 +57,6 @@ def _build_tcg():
             continue
     else:
         raise LibError("Unable to build libtcg.")
-
 
 def _build_ffi():
     path = os.path.abspath(os.path.curdir)
@@ -117,7 +81,6 @@ class build(_build):
 class sdist(_sdist):
     def run(self):
         self.execute(_clean_bins, (), msg="Removing binaries")
-        #self.execute(_copy_sources, (), msg="Copying VEX sources")
         _sdist.run(self)
 
 cmdclass = { 'build': build, 'sdist': sdist}
@@ -153,9 +116,12 @@ if 'bdist_wheel' in sys.argv and '--plat-name' not in sys.argv:
 
 setup(
     name="pytcg",
-    version="0.0.0.8",
+    version='0.0.0.1',
     description="A Python interface to libtcg and TCG IR",
-    url='https://github.com/angr-tcg/pytcg',
+    url='https://github.com/angr/pytcg',
+    maintainer = 'pwnslinger',
+    maintainer_email = 'pwnslinger@asu.edu',
+    keywords = ['TCG', 'pytcg', 'angr', 'QEMU'],
     packages=packages,
     cmdclass=cmdclass,
     long_description=readme,

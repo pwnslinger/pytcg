@@ -4,6 +4,9 @@ pytcg
 Status: Very early, but working!  So far it's able to translate from 32-bit x86
 to TCG ops and print out some op info. Pythonification is next!
 
+Now it's accessible from the following:
+`pip install pytcg`
+
 ## Build libtcg
 
 Before using pytcg, you'll need to build libtcg. You can do this by:

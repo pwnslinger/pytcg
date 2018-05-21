@@ -54,12 +54,14 @@ class TcgCall(object):
         self.iargs = iargs
 
     def __str__(self):
+        rep = ''
         rep += '%s %s,$0x%x,$%d' % (
             ffi.string(op_def.name).decode('utf-8'),
             tcg_find_helper(s, args[nb_oargs + nb_iargs]),
             args[nb_oargs + nb_iargs + 1], nb_oargs)
 
         for i in range(nb_oargs):
+            rep = ''
             rep += ',%s' % tcg_get_arg_str_idx(s, args[i])
 
         for i in range(nb_iargs):
@@ -568,8 +570,8 @@ def tcg_dump_ops(s, op, op_def, args):
             if mem_op & ~(LIBTCG_MO_AMASK | LIBTCG_MO_BSWAP | LIBTCG_MO_SSIZE):
                 rep += ",$0x%x,%u" % (op, ix)
             else:
-                s_al = alignment_name[(mem_op & LIBTCG_MO_AMASK) >> LIBTCG_MO_ASHIFT];
-                s_op = ldst_name[mem_op & (LIBTCG_MO_BSWAP | LIBTCG_MO_SSIZE)];
+                s_al = alignment_name[(mem_op & LIBTCG_MO_AMASK) >> LIBTCG_MO_ASHIFT]
+                s_op = ldst_name[mem_op & (LIBTCG_MO_BSWAP | LIBTCG_MO_SSIZE)]
                 rep += ",%s%s,%u" % (s_al, s_op, ix)
 
             i = 1
