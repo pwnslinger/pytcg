@@ -1,18 +1,18 @@
 sudo: required
 dist: trusty
 env:
-  - PY=e ANGR_REPO=pytcg
-# - PY=e ANGR_REPO=claripy
-# - PY=e ANGR_REPO=angr
-# - PY=e ANGR_REPO=angr-platforms
-# - PY=e ANGR_REPO=angr-doc
-# - PY=e ANGR_REPO=angrop
-# - PY=e ANGR_REPO=fuzzer
-# - PY=e ANGR_REPO=driller
-# - PY=p ANGR_REPO=colorguard
-# - PY=e ANGR_REPO=fidget
-# - PY=e ANGR_REPO=patcherex
-# - PY=e ANGR_REPO=tracer NOSE_OPTIONS="--process-timeout=900"
-#  - PY=p ANGR_REPO=rex NOSE_OPTIONS="-x" NOSE_PROCESSES=1
-install: ( curl https://raw.githubusercontent.com/angr/angr-dev/$TRAVIS_BRANCH/tests/travis-install.sh | grep -v 404 || curl https://raw.githubusercontent.com/angr/angr-dev/master/tests/travis-install.sh ) | bash
-script: ~/angr-dev/tests/travis-test.sh
+- PY=e ANGR_REPO=pytcg
+install: "( curl https://raw.githubusercontent.com/angr/angr-dev/$TRAVIS_BRANCH/tests/travis-install.sh
+  | grep -v 404 || curl https://raw.githubusercontent.com/angr/angr-dev/master/tests/travis-install.sh
+  ) | bash"
+script: "~/angr-dev/tests/travis-test.sh"
+deploy:
+  provider: pypi
+  user: pwnslinger
+  password:
+    secure: PXzKT1yas+PoDGTT+wCV8W3fwfwJwMaVQNnFM8fqlRePHz/y+tpWvBTlLq2ydQMO9W2+L57Gmpc08FQSZdkbPM5Mgs99HnoMaek1j52+OphIBJlFj5e0UxsCzX5yQ4s9iVm/C4kXRqrhJ8N/1JlimSVZCO7Q0RnIbWK05y+p9E9MXR82K/JGwV/+NTXXHkU9ppSZAO2xBbmDYWpJqHat7PTbJCaoj0PgOwKYLKy3SS/NajIuDqer/rFVYIZZlgfR+42JFlQTYVyhRO+ObpOZ/2J2uqEKPNm/MnV4NJu6Adu+UQcNGRtIEHdgc8X37n7C3H+D3JXowTBVDaeoLYwXkSb8032QAgTLe+W/IV2Vkw131FNp1NybHVdjZ+S/eIFRmtvAkmKEP0YMY/EKp2TJ7hwSn71EVAOAf03n10v28+tCbGKkalmgsYRW9ILkTXju1CnRjVfDb8skU+V/AhXRJFjC2HVpyLlJLe4YbbaGxqkBuapi9EIFjhmCb1lNYSff2x7z59ms0GnDU4NsLx+1We2eGbX9/hg9lakAqUwhXyK0VAREt6AGjQJJOuWBtV84gT4nNjMEhPqFAHr3DfjqsizYvM14dW+gJfFFguMcSNvbJsvWAwxxxdY3pLvMr8xfsrZqZBOHyL315Iqy/F8eKWT7F32VDTHqNiIVp33AiD0=
+  on:
+    tags: true
+    distributions: sdist bdist_wheel
+    repo: pytcg
+    branch: wip/pypi
