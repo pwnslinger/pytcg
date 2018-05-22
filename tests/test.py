@@ -17,7 +17,8 @@ def test_loop():
     }
 
     # Create the Angr project and load the first basic block located at the entry
-    p = angr.Project(test_bin, auto_load_libs=False, main_opts=main_opts)
+    p = angr.Project(test_bin, auto_load_libs=False, main_opts=main_opts,
+                     engines_preset='tcg')
     s = p.factory.entry_state()
     b = s.block()
 
