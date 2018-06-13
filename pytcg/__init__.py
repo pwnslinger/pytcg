@@ -39,29 +39,39 @@ assert(tcg is not None)
 
 
 class TcgInstructionBoundary(object):
-    def __init__(self, addr, extra):
+    def __init__(self, addr, extra, size, op_def):
         self.addr = addr
         self.extra = extra
+        self.len = size
+        self.op_def = op_def
 
     def __str__(self):
         return '@ ' + ('%16x' % self.addr)
 
+    @property
+    def __name__(self):
+        return ffi.string(self.op_def.name)
+
 class TcgCall(object):
-    def __init__(self, helper, flags, oargs, iargs):
+    def __init__(self, helper, flags, oargs, iargs, op_def):
         self.helper = helper
         self.flags = flags
         self.oargs = oargs
         self.iargs = iargs
+        self.op_def = op_def
 
+    @property
+    def __name__(self):
+        return ffi.string(self.op_def.name)
+
+    '''
     def __str__(self):
         rep = ''
         rep += '%s %s,$0x%x,$%d' % (
-            ffi.string(op_def.name).decode('utf-8'),
-            tcg_find_helper(s, args[nb_oargs + nb_iargs]),
+            ffi.string(self.op_def.name).decode('utf-8'), self.helper,
             args[nb_oargs + nb_iargs + 1], nb_oargs)
 
         for i in range(nb_oargs):
-            rep = ''
             rep += ',%s' % tcg_get_arg_str_idx(s, args[i])
 
         for i in range(nb_iargs):
@@ -72,6 +82,7 @@ class TcgCall(object):
             rep += ',%s' % t
 
         s = 'call'
+    '''
 
 class TcgOp(object):
     def __init__(self, opc, op_def, oargs, iargs, cargs, cond, label, memop):
@@ -84,6 +95,16 @@ class TcgOp(object):
         self.cond   = cond
         self.label  = label
         self.memop  = memop
+
+    def __repr__(self):
+        return 'pytcg.TcgOp.%s at 0x%x' % (ffi.string(self.op_def.name), id(self))
+
+    def __str__(self):
+        return ffi.string(self.op_def.name)
+
+    @property
+    def __name__(self):
+        return ffi.string(self.op_def.name)
 
 class IRSB(object):
     def __init__(self, data, mem_addr, arch, max_inst=None, max_bytes=None, bytes_offset=0, traceflags=0, opt_level=1, num_inst=None, num_bytes=None):
@@ -124,13 +145,14 @@ class IRSB(object):
         self._virt_addr = self.address.virtual_address
         self._num_ops = self._tb.instruction_count
 
-        ops = []
+        self.statements = []
         for i in range(self._tb.instruction_count):
             op = self._tb.instructions[i]
             op_def = lib.tcg_op_defs[op.opc]
             # name = ffi.string(op_def.name)
-            ops.append(self.from_LibTCGOp(self._tb, op, op_def, op.args))
+            self.statements.append(self.from_LibTCGOp(self._tb, op, op_def, op.args))
 
+        '''
         if True:
             print("global_temps: %d" % self._global_temps)
             print("total_temps:  %d" % self._total_temps)
@@ -158,6 +180,7 @@ class IRSB(object):
                 #print('  name............: %d' % self._tb.temps[i].name)
 
             print('')
+        '''
 
     def __del__(self):
         tcg.free_instructions(ffi.addressof(self._tb))
@@ -220,7 +243,7 @@ class IRSB(object):
 
         if op.opc == lib.LIBTCG_INDEX_op_insn_start:
             TARGET_INSN_START_WORDS = 2
-            return TcgInstructionBoundary(args[1], args[1:TARGET_INSN_START_WORDS])
+            return TcgInstructionBoundary(args[1], args[1:TARGET_INSN_START_WORDS], self.instructions, _op_def)
 
         if op.opc == lib.LIBTCG_INDEX_op_call:
             # variable number of arguments
@@ -242,7 +265,7 @@ class IRSB(object):
             helper = tcg_find_helper(s, args[nb_oargs + nb_iargs])
             _flags = args[nb_oargs + nb_iargs + 1]
 
-            return TcgCall(helper, _flags, _oargs, _iargs)
+            return TcgCall(helper, _flags, _oargs, _iargs, _op_def)
 
         nb_oargs = op_def.nb_oargs
         nb_iargs = op_def.nb_iargs
@@ -570,8 +593,8 @@ def tcg_dump_ops(s, op, op_def, args):
             if mem_op & ~(LIBTCG_MO_AMASK | LIBTCG_MO_BSWAP | LIBTCG_MO_SSIZE):
                 rep += ",$0x%x,%u" % (op, ix)
             else:
-                s_al = alignment_name[(mem_op & LIBTCG_MO_AMASK) >> LIBTCG_MO_ASHIFT]
-                s_op = ldst_name[mem_op & (LIBTCG_MO_BSWAP | LIBTCG_MO_SSIZE)]
+                s_al = alignment_name[(mem_op & LIBTCG_MO_AMASK) >> LIBTCG_MO_ASHIFT];
+                s_op = ldst_name[mem_op & (LIBTCG_MO_BSWAP | LIBTCG_MO_SSIZE)];
                 rep += ",%s%s,%u" % (s_al, s_op, ix)
 
             i = 1
