@@ -23,6 +23,8 @@ def test_loop():
     s = p.factory.entry_state()
     simgr = p.factory.simgr(s)
     b = s.block()
+    import IPython
+    IPython.embed()
 
     # Pretty-print target arch instructions
     print('Input Block Instructions')

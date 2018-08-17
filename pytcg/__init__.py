@@ -6,6 +6,7 @@ import sys
 import argparse
 import archinfo
 import os.path
+import enum
 #
 # Main libtcg loading and initialization
 #
@@ -46,7 +47,11 @@ class TcgInstructionBoundary(object):
         self.op_def = op_def
 
     def __str__(self):
-        return '@ ' + ('%16x' % self.addr)
+        return '%s @ 0x' + TARGET_FMT_lx % (type(self), self.addr)
+
+    def __repr__(self):
+        return '%s @ 0x' + TARGET_FMT_lx % (type(self), self.addr)
+        #return '@ ' + ('%8x' % self.addr)
 
     @property
     def __name__(self):
@@ -106,6 +111,32 @@ class TcgOp(object):
     def __name__(self):
         return ffi.string(self.op_def.name)
 
+TEMP_cnt = 0
+
+class TCGTemp(object):
+    def __init__(self, tmp):
+        self.reg = ffi.cast('LibTCGReg', tmp.reg)
+        self.val_type = ffi.cast('LibTCGTempVal', tmp.val_type)
+        self.base_type = ffi.cast('LibTCGType', tmp.base_type)
+        self.type = type_name[ffi.cast('LibTCGType', tmp.type)]
+        self.fixed_reg = int(ffi.cast('uint32_t', tmp.fixed_reg))
+        self.indirect_reg = int(ffi.cast('uint32_t', tmp.indirect_reg))
+        self.indirect_base = int(ffi.cast('uint32_t', tmp.indirect_base))
+        self.mem_coherent = int(ffi.cast('uint32_t', tmp.mem_coherent))
+        self.mem_allocated = int(ffi.cast('uint32_t', tmp.mem_allocated))
+        self.temp_local = int(ffi.cast('uint32_t', tmp.temp_local))
+        self.temp_allocated = int(ffi.cast('uint32_t', tmp.temp_allocated))
+        self.val = ffi.cast('tcg_temp', tmp.val)
+        self.mem_base = ffi.cast('struct LibTCGTemp *', tmp.mem_base)
+        self.mem_offset = int(ffi.cast('intptr_t', tmp.mem_offset))
+        try:
+            self.name = str(ffi.string(tmp.name))
+        except Exception:
+            global TEMP_cnt
+            self.name = 'tmp'+ str(TEMP_cnt)
+            TEMP_cnt+=1
+
+
 class IRSB(object):
     def __init__(self, data, mem_addr, arch, max_inst=None, max_bytes=None, bytes_offset=0, traceflags=0, opt_level=1, num_inst=None, num_bytes=None):
         # FIXME: Unsupported interfaces
@@ -122,8 +153,10 @@ class IRSB(object):
         self.arch = arch
         self.addr = mem_addr
         self.size = len(data)
+        self.temp = []
 
         self._instructions = None
+        self._statements = []
 
         #
         # Perform the lifting
@@ -145,14 +178,13 @@ class IRSB(object):
         self._virt_addr = self.address.virtual_address
         self._num_ops = self._tb.instruction_count
 
-        self.statements = []
-        for i in range(self._tb.instruction_count):
-            op = self._tb.instructions[i]
-            op_def = lib.tcg_op_defs[op.opc]
-            # name = ffi.string(op_def.name)
-            self.statements.append(self.from_LibTCGOp(self._tb, op, op_def, op.args))
+        for i in range(self._total_temps):
+            self.temp.append(TCGTemp(self._tb.temps[i]))
 
-        '''
+        assert len(self.temp) == self._total_temps
+
+        # TODO: create TCGTemp class for each tmp reg
+
         if True:
             print("global_temps: %d" % self._global_temps)
             print("total_temps:  %d" % self._total_temps)
@@ -160,9 +192,9 @@ class IRSB(object):
             print("num ops:      %d" % self._num_ops)
             print('')
 
+            '''
             for i in range(self._total_temps):
                 print('temp #%d = %s' % (i, tcg_get_arg_str_idx(self._tb, i)))
-                continue
                 print('  reg.............: %d' % self._tb.temps[i].reg)
                 print('  val_type........: %d' % self._tb.temps[i].val_type)
                 print('  base_type.......: %d' % self._tb.temps[i].base_type)
@@ -175,12 +207,13 @@ class IRSB(object):
                 print('  temp_local......: %d' % self._tb.temps[i].temp_local)
                 print('  temp_allocated..: %d' % self._tb.temps[i].temp_allocated)
                 print('  val.............: %d' % self._tb.temps[i].val)
-                #print('  mem_base........: %d' % self._tb.temps[i].mem_base)
+                print('  mem_base........: %d' % self._tb.temps[i].mem_base)
                 print('  mem_offset......: %d' % self._tb.temps[i].mem_offset)
-                #print('  name............: %d' % self._tb.temps[i].name)
+                print('  name............: %d' % self._tb.temps[i].name)
 
             print('')
-        '''
+            '''
+
 
     def __del__(self):
         tcg.free_instructions(ffi.addressof(self._tb))
@@ -228,6 +261,16 @@ class IRSB(object):
 
         return self._instructions
 
+    @property
+    def statements(self):
+        for i in range(self._tb.instruction_count):
+            op = self._tb.instructions[i]
+            op_def = lib.tcg_op_defs[op.opc]
+            # name = ffi.string(op_def.name)
+            self._statements.append(self.from_LibTCGOp(self._tb, op, op_def, op.args))
+
+        return self._statements
+
     def from_LibTCGOp(self, s, op, op_def, args):
         _opc    = op.opc
         _op_def = op_def
@@ -272,10 +315,12 @@ class IRSB(object):
         nb_cargs = op_def.nb_cargs
         k = 0
         for i in range(nb_oargs):
-            _oargs.append(args[k])
+            #_oargs.append(self.temp[args[k]].name)
+            _oargs.append(tcg_get_arg_str_idx(s, args[k]))
             k += 1
         for i in range(nb_iargs):
-            _iargs.append(args[k])
+            #_iargs.append(self.temp[args[k]].name)
+            _iargs.append(tcg_get_arg_str_idx(s, args[k]))
             k += 1
         if c in [
             lib.LIBTCG_INDEX_op_brcond_i32,
@@ -286,11 +331,11 @@ class IRSB(object):
             lib.LIBTCG_INDEX_op_brcond_i64,
             lib.LIBTCG_INDEX_op_setcond_i64,
             lib.LIBTCG_INDEX_op_movcond_i64]:
-            # if args[k] in cond_name:
-            #     _cond = cond_name[args[k]]
-            # else:
-            #     _cond = '$0x%x' % args[k]
-            _cond = args[k]
+            if args[k] in cond_name:
+                 _cond = cond_name[args[k]]
+            else:
+                 _cond = '$0x%x' % args[k]
+            _cond = cond_name[args[k]]
             k += 1
             i = 1
         elif c in [
@@ -328,9 +373,9 @@ class IRSB(object):
             k += 1
 
         while i < nb_cargs:
+            _cargs.append(args[k])
             i += 1
             k += 1
-            _cargs.append(args[k])
 
         return TcgOp(_opc, _op_def, _oargs, _iargs, _cargs, _cond, _label, _memop)
 
@@ -373,6 +418,22 @@ def arg_label(i):
     """
     return ffi.cast('TCGLabel *', i)
 
+#typedef enum LibTCGType {
+LIBTCG_TYPE_I32 = 0
+LIBTCG_TYPE_I64 = 1
+LIBTCG_TYPE_COUNT = 2
+LIBTCG_TYPE_REG = LIBTCG_TYPE_I64
+LIBTCG_TYPE_PTR = LIBTCG_TYPE_I64
+#} LibTCGType;
+
+type_name = {
+    LIBTCG_TYPE_I32: 'LIBTCG_TYPE_I32',
+    LIBTCG_TYPE_I64 : 'LIBTCG_TYPE_I64',
+    LIBTCG_TYPE_COUNT : 'LIBTCG_TYPE_COUNT',
+    LIBTCG_TYPE_REG : LIBTCG_TYPE_I64,
+    LIBTCG_TYPE_PTR : LIBTCG_TYPE_I64
+}
+
 # typedef enum {
 LIBTCG_COND_NEVER  = 0 | 0 | 0 | 0
 LIBTCG_COND_ALWAYS = 0 | 0 | 0 | 1
@@ -402,6 +463,72 @@ cond_name = {
     LIBTCG_COND_LEU:    "leu",
     LIBTCG_COND_GTU:    "gtu",
 }
+
+
+
+'''
+Instead of computing the condition codes after each x86 instruction,
+QEMU just stores one operand (called CC_SRC), the result
+(called CC_DST) and the type of operation (called CC_OP). When the
+condition codes are needed, the condition codes can be calculated
+using this information. Condition codes are not generated if they
+are only needed for conditional branches.
+'''
+
+#typedef enum {
+CC_OP_DYNAMIC   = 0 # must use dynamic code to get cc_op
+CC_OP_EFLAGS    = 1  #all cc are explicitly computed, CC_SRC = flags
+CC_OP_MULB      = 2 #modify all flags, C, O = (CC_SRC != 0)
+CC_OP_MULW      = 3
+CC_OP_MULL      = 4
+CC_OP_MULQ      = 5
+CC_OP_ADDB      = 6 #modify all flags, CC_DST = res, CC_SRC = src1
+CC_OP_ADDW      = 7
+CC_OP_ADDL      = 8
+CC_OP_ADDQ      = 9
+CC_OP_ADCB      = 10 #modify all flags, CC_DST = res, CC_SRC = src1
+CC_OP_ADCW      = 11
+CC_OP_ADCL      = 12
+CC_OP_ADCQ      = 13
+CC_OP_SUBB      = 14 #modify all flags, CC_DST = res, CC_SRC = src1
+CC_OP_SUBW      = 15
+CC_OP_SUBL      = 16
+CC_OP_SUBQ      = 17
+CC_OP_SBBB      = 18 #modify all flags, CC_DST = res, CC_SRC = src1
+CC_OP_SBBW      = 19
+CC_OP_SBBL      = 20
+CC_OP_SBBQ      = 21
+CC_OP_LOGICB    = 22 # modify all flags, CC_DST = res
+CC_OP_LOGICW    = 23
+CC_OP_LOGICL    = 24
+CC_OP_LOGICQ    = 25
+CC_OP_INCB      = 26 # modify all flags except, CC_DST = res, CC_SRC = C
+CC_OP_INCW      = 27
+CC_OP_INCL      = 28
+CC_OP_INCQ      = 29
+CC_OP_DECB      = 30  # modify all flags except, CC_DST = res, CC_SRC = C
+CC_OP_DECW      = 31
+CC_OP_DECL      = 32
+CC_OP_DECQ      = 33
+CC_OP_SHLB      = 34  # modify all flags, CC_DST = res, CC_SRC.msb = C
+CC_OP_SHLW      = 35
+CC_OP_SHLL      = 36
+CC_OP_SHLQ      = 37
+CC_OP_SARB      = 38 # modify all flags, CC_DST = res, CC_SRC.lsb = C
+CC_OP_SARW      = 39
+CC_OP_SARL      = 40
+CC_OP_SARQ      = 41
+CC_OP_BMILGB    = 42 # Z,S via CC_DST, C = SRC==0; O=0; P,A undefined
+CC_OP_BMILGW    = 43
+CC_OP_BMILGL    = 44
+CC_OP_BMILGQ    = 45
+CC_OP_ADCX      = 46 # CC_DST = C, CC_SRC = rest.
+CC_OP_ADOX      = 47 # CC_DST = O, CC_SRC = rest.
+CC_OP_ADCOX     = 48 # CC_DST = C, CC_SRC2 = O, CC_SRC = rest.
+CC_OP_CLR       = 49 # Z set, all other flags clear.
+CC_OP_POPCNT    = 50 # Z via CC_SRC, all other flags clear.
+CC_OP_NB        = 51
+#} CCOp;
 
 # typedef enum LibTCGMemOp {
 LIBTCG_MO_8        = 0
